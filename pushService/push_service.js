@@ -10,8 +10,8 @@ import { v4 as uuidv4 } from "uuid";
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://localhost:5672";
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
+const REDIS_URL = process.env.REDIS_URL;
 const SERVICE_PORT = process.env.SERVICE_PORT || 4002;
 const IDEMPOTENCY_TTL_SECONDS = Number(process.env.IDEMPOTENCY_TTL_SECONDS || 86400);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 5);
