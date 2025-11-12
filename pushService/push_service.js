@@ -1,15 +1,3 @@
-/**
- * push_service.js
- *
- * Node.js Push Service:
- * - Listens to `push.queue` on RabbitMQ
- * - Sends push notifications using Firebase Cloud Messaging (FCM)
- * - Validates push tokens, uses circuit breaker around FCM send
- * - Retries similarly to email service; final destination: `failed.queue`
- * - Exposes /health and /status/:request_id
- *
- * Message format same as Email Service but metadata.push_token or user metadata must contain the token.
- */
 
 import amqp from "amqplib";
 import Redis from "ioredis";
@@ -21,22 +9,22 @@ import { v4 as uuidv4 } from "uuid";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
-/* Config */
+
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://localhost:5672";
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const SERVICE_PORT = process.env.SERVICE_PORT || 4002;
 const IDEMPOTENCY_TTL_SECONDS = Number(process.env.IDEMPOTENCY_TTL_SECONDS || 86400);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 5);
 
-/* Rabbit names */
+
 const EXCHANGE = "notifications.direct";
 const PUSH_QUEUE = "push.queue";
 const FAILED_QUEUE = "failed.queue";
 
-/* Redis */
+
 const redis = new Redis(REDIS_URL);
 
-/* Firebase initialization (expects env vars for credentials) */
+
 if (!process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PROJECT_ID) {
   logger.warn("Firebase env vars missing - FCM will not be available until configured.");
 } else {
@@ -50,7 +38,7 @@ if (!process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL || !
   });
 }
 
-/* raw send via admin.messaging */
+
 async function raw_send_push({ token, payload }) {
   if (!admin.apps.length) throw new Error("firebase_not_initialized");
   const response = await admin.messaging().sendToDevice(token, payload);
@@ -60,9 +48,9 @@ async function raw_send_push({ token, payload }) {
 const breakerOptions = { timeout: 10_000, errorThresholdPercentage: 60, resetTimeout: 30_000 };
 const sendPushBreaker = new CircuitBreaker(raw_send_push, breakerOptions);
 
-/* Basic payload builder */
+
 function build_fcm_payload(metadata, variables) {
-  // metadata may include title, body, image_url, click_action
+
   const notif = {
     notification: {
       title: metadata?.title || variables?.title || "Notification",
@@ -76,7 +64,7 @@ function build_fcm_payload(metadata, variables) {
   return notif;
 }
 
-/* Connect and consume */
+
 async function start() {
   const conn = await amqp.connect(RABBITMQ_URL);
   const channel = await conn.createChannel();
@@ -118,14 +106,12 @@ async function start() {
       const token = payload.metadata?.push_token;
       if (!token) throw new Error("push_token_missing");
 
-      // Validate token (quick naive check: non-empty string). More advanced: call FCM token check or maintain device registry.
+
       if (typeof token !== "string" || token.length < 10) throw new Error("invalid_push_token");
 
       const fcm_payload = build_fcm_payload(payload.metadata, payload.variables);
       const send_result = await sendPushBreaker.fire({ token, payload: fcm_payload });
 
-      // analyze send_result for failures
-      // firebase sendToDevice returns { results: [{error, messageId}] }
       const has_error = send_result.results && send_result.results.some(r => r.error);
       if (has_error) {
         const first_error = send_result.results.find(r => r.error).error;
@@ -154,7 +140,7 @@ async function start() {
   }, { noAck: false });
 }
 
-/* Fastify endpoints */
+
 const app = Fastify({ logger: false });
 
 app.get("/health", async () => ({ status: "ok", service: "push_service", timestamp: new Date().toISOString() }));
@@ -167,7 +153,7 @@ app.get("/status/:request_id", async (req, reply) => {
   return { success: true, data: JSON.parse(data), message: "ok", meta: null };
 });
 
-/* Start */
+
 (async () => {
   try {
     await start();

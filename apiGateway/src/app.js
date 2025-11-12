@@ -10,16 +10,16 @@ import statusRoutes from "./routes/status.routes.js";
 export function build() {
   const fastify = Fastify({ logger: true });
 
-  // Plugins
+
   fastify.register(redisPlugin);
   fastify.register(amqpPlugin);
 
-  // Routes
+
   fastify.register(userRoutes, { prefix: "/api/v1" });
   fastify.register(notificationRoutes, { prefix: "/api/v1" });
   fastify.register(statusRoutes, { prefix: "/api/v1" });
 
-  // Health check
+  
   fastify.get("/health", async () => ({ status: "ok" }));
 
   return fastify;
